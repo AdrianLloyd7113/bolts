@@ -1,0 +1,3 @@
+/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/cmake-build-debug/CMakeFiles/EngineTemplate.dir
+/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/cmake-build-debug/CMakeFiles/rebuild_cache.dir
