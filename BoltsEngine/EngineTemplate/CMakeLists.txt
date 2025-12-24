@@ -13,6 +13,7 @@ add_executable(${PROJECT_NAME}
         src/engine/bolts.cpp
         src/engine/bolts.h
         src/glad.c
+        include/stb_image.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

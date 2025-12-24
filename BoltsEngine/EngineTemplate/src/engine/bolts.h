@@ -7,6 +7,7 @@ struct GLFWwindow;
 const float WINDOW_WIDTH = 1200;
 const float WINDOW_HEIGHT = 900;
 
+extern bool skyboxEnabled;
 extern bool gameActive;
 
 extern unsigned int shaderProgram;
@@ -81,6 +82,11 @@ void engineUpdate();
 void engineBeginFrame();
 void engineEndFrame();
 void handleUI();
+
+//Skyboxes
+
+unsigned int initSkybox(const char* faces[6]);
+void renderSkybox();
 
 extern bool isPaused;
 

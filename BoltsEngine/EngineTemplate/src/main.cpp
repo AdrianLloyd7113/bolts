@@ -9,6 +9,10 @@
 //Sets master variables for the engine; can be used for setting other
 //critical values
 void setPrimaryVars(){
+    //Allows a skybox, or not;
+    //Skybox source textures must be found under /skybox/ in project root
+    skyboxEnabled = false;
+
     //Limits on camera movement (change these to restrict in-game camera yaw/pitch)
     pitchLimit = -1.0;
     yawLimit = -1.0;
@@ -37,9 +41,9 @@ void update() {
 
 
 int main() {
+    setPrimaryVars();
     startEngine();
 
-    setPrimaryVars();
     while (gameActive){
         update();
     }

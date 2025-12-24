@@ -1,3 +1,6 @@
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "bolts.h"
@@ -19,6 +22,7 @@ unsigned int backgroundVAO, backgroundVBO;
 unsigned int crosshairVAO, crosshairVBO, uiShaderProgram;
 GLFWwindow* window;
 
+bool skyboxEnabled;
 bool gameActive;
 
 unsigned int createShaderProgram() {
@@ -222,9 +226,9 @@ void startEngine(){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    #ifdef __APPLE__
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    #endif
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
 
     //generate window
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
@@ -317,6 +321,16 @@ void startEngine(){
     glBindVertexArray(0);
 
     uiShaderProgram = createUIShaderProgram();
+
+    if (skyboxEnabled){
+        const char* skyboxFaces[6] = {"skybox/right.jpg",
+                                      "skybox/left.jpg",
+                                      "skybox/top.jpg",
+                                      "skybox/bottom.jpg",
+                                      "skybox/front.jpg",
+                                      "skybox/back.jpg"};
+        initSkybox(skyboxFaces);
+    }
 }
 
 //core engine mechanics
@@ -339,11 +353,14 @@ void engineBeginFrame(){
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glDepthMask(GL_FALSE);
-    glUseProgram(backgroundShaderProgram);
-    glBindVertexArray(backgroundVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glDepthMask(GL_TRUE);
+    if (skyboxEnabled) renderSkybox();
+    else{
+        glDepthMask(GL_FALSE);
+        glUseProgram(backgroundShaderProgram);
+        glBindVertexArray(backgroundVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDepthMask(GL_TRUE);
+    }
 
     glUseProgram(shaderProgram);
 
@@ -385,6 +402,7 @@ void handleUI(){
     glDrawArrays(GL_TRIANGLES, 0, 12);
     glEnable(GL_DEPTH_TEST);
 }
+
 
 bool isPaused = false;
 const char* vertexShaderSource = R"(
@@ -482,3 +500,189 @@ bool firstMouse = true;
 float yaw = -90.0f;
 float pitch = 0.0f;
 float sensitivity = 0.1f;
+
+//Skyboxes
+
+// Add these to bolts.h
+unsigned int skyboxVAO, skyboxVBO;
+unsigned int skyboxShaderProgram;
+unsigned int cubemapTexture;
+
+// Skybox shader sources
+const char* skyboxVertexShader = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+out vec3 TexCoords;
+
+uniform mat4 projection;
+uniform mat4 view;
+
+void main() {
+    TexCoords = aPos;
+    vec4 pos = projection * mat4(mat3(view)) * vec4(aPos, 1.0);
+    gl_Position = pos.xyww; // Ensures skybox is always at max depth
+}
+)";
+
+const char* skyboxFragmentShader = R"(
+#version 330 core
+out vec4 FragColor;
+
+in vec3 TexCoords;
+
+uniform samplerCube skybox;
+
+void main() {
+    FragColor = texture(skybox, TexCoords);
+}
+)";
+
+unsigned int initSkybox(const char* faces[6]) {
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &skyboxVertexShader, nullptr);
+    glCompileShader(vertexShader);
+
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &skyboxFragmentShader, nullptr);
+    glCompileShader(fragmentShader);
+
+    skyboxShaderProgram = glCreateProgram();
+    glAttachShader(skyboxShaderProgram, vertexShader);
+    glAttachShader(skyboxShaderProgram, fragmentShader);
+    glLinkProgram(skyboxShaderProgram);
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    float skyboxVertices[] = {
+            -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+            -1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f
+    };
+
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    glGenTextures(1, &cubemapTexture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+
+    int successCount = 0;
+    for (unsigned int i = 0; i < 6; i++) {
+        int width, height, nrChannels;
+        stbi_set_flip_vertically_on_load(false);
+        unsigned char *data = stbi_load(faces[i], &width, &height, &nrChannels, 0);
+        if (data) {
+            GLenum format = (nrChannels == 3) ? GL_RGB : GL_RGBA;
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                         0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+            std::cout << "Loaded skybox face " << i << ": " << faces[i]
+                      << " (" << width << "x" << height << ", " << nrChannels << " channels)" << std::endl;
+            successCount++;
+        } else {
+            std::cerr << "Failed to load skybox texture " << i << ": " << faces[i] << std::endl;
+            std::cerr << "Error: " << stbi_failure_reason() << std::endl;
+
+            unsigned char fallbackData[12] = {
+                    255, 0, 0, 255,
+                    0, 255, 0, 255,
+                    0, 0, 255, 255
+            };
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                         0, GL_RGB, 2, 2, 0, GL_RGB, GL_UNSIGNED_BYTE, fallbackData);
+        }
+
+        std::cout << faces[i]
+                  << " " << width << "x" << height
+                  << " channels=" << nrChannels << std::endl;
+    }
+
+    std::cout << "Successfully loaded " << successCount << "/6 skybox faces" << std::endl;
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+    return cubemapTexture;
+}
+
+void renderSkybox() {
+    glDepthFunc(GL_LEQUAL);
+    glUseProgram(skyboxShaderProgram);
+
+    GLint isLinked = 0;
+    glGetProgramiv(skyboxShaderProgram, GL_LINK_STATUS, &isLinked);
+    if (isLinked == GL_FALSE) {
+        std::cerr << "Skybox shader not linked!" << std::endl;
+    }
+
+    GLint samplerLoc = glGetUniformLocation(skyboxShaderProgram, "skybox");
+    glUniform1i(samplerLoc, 0);
+
+    glm::mat4 view = glm::mat4(glm::mat3(glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp)));
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f),
+                                            (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT,
+                                            0.1f, 500.0f);
+
+    GLint viewLoc = glGetUniformLocation(skyboxShaderProgram, "view");
+    GLint projLoc = glGetUniformLocation(skyboxShaderProgram, "projection");
+
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, &projection[0][0]);
+
+    glBindVertexArray(skyboxVAO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+    glDepthFunc(GL_LESS);
+}

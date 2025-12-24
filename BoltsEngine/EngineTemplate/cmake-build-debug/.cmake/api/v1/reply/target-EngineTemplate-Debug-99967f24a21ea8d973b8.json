@@ -32,13 +32,13 @@
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 22,
+				"line" : 23,
 				"parent" : 0
 			},
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 18,
+				"line" : 19,
 				"parent" : 0
 			}
 		]
@@ -162,7 +162,8 @@
 			"name" : "Header Files",
 			"sourceIndexes" : 
 			[
-				2
+				2,
+				4
 			]
 		}
 	],
@@ -190,6 +191,11 @@
 			"compileGroupIndex" : 1,
 			"path" : "src/glad.c",
 			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "include/stb_image.h",
+			"sourceGroupIndex" : 1
 		}
 	],
 	"type" : "EXECUTABLE"
