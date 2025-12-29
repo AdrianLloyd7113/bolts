@@ -6,6 +6,8 @@
 #include <vector>
 #include <iostream>
 
+void keyboardInput(GLFWwindow*){}
+
 //Sets master variables for the engine; can be used for setting other
 //critical values
 void setPrimaryVars(){

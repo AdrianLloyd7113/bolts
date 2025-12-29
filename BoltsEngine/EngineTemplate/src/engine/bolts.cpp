@@ -10,7 +10,9 @@
 #include <glm/ext/matrix_transform.hpp>
 #include "bolts.h"
 
-std::vector<Rectangle> surfaces;
+std::vector<std::unique_ptr<Shape>> surfaces;
+std::vector<std::unique_ptr<Physical>> physicalWorld;
+
 bool escPressedLastFrame = false;
 
 float pitchLimit;
@@ -23,6 +25,8 @@ unsigned int crosshairVAO, crosshairVBO, uiShaderProgram;
 GLFWwindow* window;
 
 bool skyboxEnabled;
+std::string skyboxPath;
+
 bool gameActive;
 
 unsigned int createShaderProgram() {
@@ -135,46 +139,11 @@ unsigned int createUIShaderProgram() {
 }
 
 void drawTriangle(Triangle toDraw, unsigned int currentShaderProgram, glm::vec4 color) {
-    float vertices[] = {
-            toDraw.a.x, toDraw.a.y, toDraw.a.z, 0.0f, 1.0f, 0.0f,
-            toDraw.b.x, toDraw.b.y, toDraw.b.z, 0.0f, 1.0f, 0.0f,
-            toDraw.c.x, toDraw.c.y, toDraw.c.z, 0.0f, 1.0f, 0.0f
-    };
-    unsigned int VAO, VBO;
-
-    int colorLoc = glGetUniformLocation(currentShaderProgram, "uColor");
-    glUniform4f(colorLoc, color.r, color.g, color.b, color.a);
-
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glUseProgram(currentShaderProgram);
-
-    //light position
-    glm::vec3 lightPos = glm::vec3(0.0f, 100.0f, 0.0f); // above the scene
-    glUniform3fv(glGetUniformLocation(currentShaderProgram, "lightPos"), 1, &lightPos[0]);
-
-    //view position
-    glUniform3fv(glGetUniformLocation(currentShaderProgram, "viewPos"), 1, &cameraPos[0]);
-
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    toDraw.draw(currentShaderProgram, color);
 }
 
-void drawRectangle(Rectangle toDraw, unsigned int currentShaderProgram, glm::vec4 colour){
-    drawTriangle(toDraw.a, currentShaderProgram, colour);
-    drawTriangle(toDraw.b, currentShaderProgram, colour);
+void drawRectangle(Rectangle toDraw, unsigned int currentShaderProgram, glm::vec4 color){
+    toDraw.draw(currentShaderProgram, color);
 }
 
 void renderPauseMenu(unsigned int pauseShaderProgram) {
@@ -322,13 +291,27 @@ void startEngine(){
 
     uiShaderProgram = createUIShaderProgram();
 
-    if (skyboxEnabled){
-        const char* skyboxFaces[6] = {"skybox/right.jpg",
-                                      "skybox/left.jpg",
-                                      "skybox/top.jpg",
-                                      "skybox/bottom.jpg",
-                                      "skybox/front.jpg",
-                                      "skybox/back.jpg"};
+#include <string>
+
+    std::string base = skyboxPath;
+
+    std::string s_right = base + "right.png";
+    std::string s_left = base + "left.png";
+    std::string s_top = base + "top.png";
+    std::string s_bottom = base + "bottom.png";
+    std::string s_front = base + "front.png";
+    std::string s_back = base + "back.png";
+
+    if (skyboxEnabled) {
+        const char* skyboxFaces[6] = {
+                s_right.c_str(),
+                s_left.c_str(),
+                s_top.c_str(),
+                s_bottom.c_str(),
+                s_front.c_str(),
+                s_back.c_str()
+        };
+
         initSkybox(skyboxFaces);
     }
 }
@@ -340,6 +323,7 @@ void engineUpdate() {
         return;
     }
 
+    physicalWorld.clear();
     surfaces.clear();
 
     keyboardInput(window);
@@ -368,7 +352,7 @@ void engineBeginFrame(){
             glm::radians(45.0f),
             (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT,
             0.1f,
-            500.0f
+            2000.0f
     );
 
     glm::mat4 view = glm::lookAt(
@@ -385,6 +369,7 @@ void engineBeginFrame(){
             glGetUniformLocation(shaderProgram, "projection"),
             1, GL_FALSE, &projection[0][0]
     );
+
 }
 void engineEndFrame(){
     glfwSwapBuffers(window);
@@ -685,4 +670,16 @@ void renderSkybox() {
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
     glDepthFunc(GL_LESS);
+}
+
+void drawScene(){
+    for (auto& physical : physicalWorld){
+        physical->draw(shaderProgram);
+    }
+}
+
+void setCamera(Camera target){
+    cameraPos = target.pos;
+    cameraFront = target.front;
+    cameraUp = target.up;
 }
