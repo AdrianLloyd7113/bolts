@@ -10,7 +10,10 @@
 #include <glm/ext/matrix_transform.hpp>
 #include "bolts.h"
 
-std::vector<std::unique_ptr<Shape>> surfaces;
+//Time variables
+float deltaTime = 0.0f;
+float lastFrameTime = 0.0f;
+
 std::vector<std::unique_ptr<Physical>> physicalWorld;
 
 bool escPressedLastFrame = false;
@@ -25,8 +28,6 @@ unsigned int crosshairVAO, crosshairVBO, uiShaderProgram;
 GLFWwindow* window;
 
 bool skyboxEnabled;
-std::string skyboxPath;
-
 bool gameActive;
 
 unsigned int createShaderProgram() {
@@ -136,14 +137,6 @@ unsigned int createUIShaderProgram() {
     glDeleteShader(fragmentShader);
 
     return returnShaderProgram;
-}
-
-void drawTriangle(Triangle toDraw, unsigned int currentShaderProgram, glm::vec4 color) {
-    toDraw.draw(currentShaderProgram, color);
-}
-
-void drawRectangle(Rectangle toDraw, unsigned int currentShaderProgram, glm::vec4 color){
-    toDraw.draw(currentShaderProgram, color);
 }
 
 void renderPauseMenu(unsigned int pauseShaderProgram) {
@@ -291,40 +284,30 @@ void startEngine(){
 
     uiShaderProgram = createUIShaderProgram();
 
-#include <string>
-
-    std::string base = skyboxPath;
-
-    std::string s_right = base + "right.png";
-    std::string s_left = base + "left.png";
-    std::string s_top = base + "top.png";
-    std::string s_bottom = base + "bottom.png";
-    std::string s_front = base + "front.png";
-    std::string s_back = base + "back.png";
-
-    if (skyboxEnabled) {
-        const char* skyboxFaces[6] = {
-                s_right.c_str(),
-                s_left.c_str(),
-                s_top.c_str(),
-                s_bottom.c_str(),
-                s_front.c_str(),
-                s_back.c_str()
-        };
-
+    if (skyboxEnabled){
+        const char* skyboxFaces[6] = {"/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/right.png",
+                                      "/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/left.png",
+                                      "/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/top.png",
+                                      "/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/bottom.png",
+                                      "/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/front.png",
+                                      "/Users/adrianlloyd/Desktop/Work/Projects/BoltsEngine/EngineTemplate/skybox/back.png"};
         initSkybox(skyboxFaces);
     }
 }
 
 //core engine mechanics
 void engineUpdate() {
+    float currentTime = static_cast<float>(glfwGetTime());
+    deltaTime = currentTime - lastFrameTime;
+    lastFrameTime = currentTime;
+
     if (glfwWindowShouldClose(window)) {
         gameActive = false;
         return;
     }
 
-    physicalWorld.clear();
-    surfaces.clear();
+//    physicalWorld.clear();
+//    surfaces.clear();
 
     keyboardInput(window);
     glfwPollEvents();
@@ -332,6 +315,8 @@ void engineUpdate() {
 
 //rendering
 void engineBeginFrame(){
+    simulateFrame();
+
     const glm::vec4 bg(0, 0, 0.431, 1);
     glClearColor(bg.r, bg.g, bg.b, bg.a);
     glEnable(GL_DEPTH_TEST);
@@ -678,8 +663,46 @@ void drawScene(){
     }
 }
 
+//Physics
+
+std::vector<Physical*> detectCollisionWithPhysical(Physical* physical){
+    std::vector<Physical*> collidingPhysicals;
+    for (auto& target : physicalWorld) {
+        if (target->isColliding(physical)) {
+            collidingPhysicals.push_back(target.get());
+        }
+    }
+
+    return collidingPhysicals;
+}
+
+void simulateFrame(){
+    for (auto& physical : physicalWorld){
+        //forces
+        if (physical->forces.size() > 0){
+            for (glm::vec3 force : physical->forces){
+                physical->x += force.x * getDeltaTime();
+                physical->y += force.y * getDeltaTime();
+                physical->z += force.z * getDeltaTime();
+            }
+        }
+
+        physical->forces.clear();
+
+        //TODO: Set physical position accordingly
+
+        if (physical->isCollidable){
+            detectCollisionWithPhysical(physical.get());
+        }
+    }
+}
+
 void setCamera(Camera target){
     cameraPos = target.pos;
     cameraFront = target.front;
     cameraUp = target.up;
+}
+
+float getDeltaTime() {
+    return deltaTime;
 }

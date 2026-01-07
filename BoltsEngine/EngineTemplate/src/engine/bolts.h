@@ -3,25 +3,20 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+//MISC VARIABLE DECLARATIONS
+
+//Default window dimensions
 struct GLFWwindow;
 const float WINDOW_WIDTH = 1200;
 const float WINDOW_HEIGHT = 900;
 
-extern std::string skyboxPath;
+//Time
+extern float deltaTime;
+extern float lastFrameTime;
+
+//Global game control variables
 extern bool skyboxEnabled;
 extern bool gameActive;
-
-extern glm::vec3 cameraPos;
-extern glm::vec3 cameraFront;
-extern glm::vec3 cameraUp;
-extern unsigned int shaderProgram;
-extern unsigned int backgroundShaderProgram;
-extern unsigned int backgroundVAO, backgroundVBO;
-extern unsigned int crosshairVAO, crosshairVBO, uiShaderProgram;
-extern GLFWwindow* window;
-
-extern float pitchLimit;
-extern float yawLimit;
 
 #pragma once
 #include <glm/glm.hpp>
@@ -29,11 +24,39 @@ extern float yawLimit;
 #include <memory>
 #include <limits>
 
+//CAMERAS
+
+//Global camera control variables
+extern glm::vec3 cameraPos;
+extern glm::vec3 cameraFront;
+extern glm::vec3 cameraUp;
+
+//Camera class to store positional and rotational data about cameras
+class Camera{
+public:
+    glm::vec3 pos;
+    glm::vec3 front;
+    glm::vec3 up;
+
+    Camera(glm::vec3 position, glm::vec3 frontDir, glm::vec3 upDir) {
+        pos = position;
+        front = frontDir;
+        up = upDir;
+    }
+};
+
+//Function to set current camera to target Camera object
+void setCamera(Camera target);
+
+//GEOMETRY AND RENDERING
+
+//Basic geometry classes (including generic "Shape")
 class Shape {
 public:
     virtual ~Shape() = default;
     [[nodiscard]] virtual std::vector<glm::vec3> getVertices() const = 0;
     virtual void draw(unsigned int shaderProgram, glm::vec4 color) const = 0;
+    virtual void drawWithOffset(unsigned int shaderProgram, glm::vec4 color, float xOffset, float yOffset, float zOffset) const = 0;
 };
 
 class Triangle : public Shape {
@@ -47,10 +70,15 @@ public:
         return { a, b, c };
     }
     void draw(unsigned int currentShaderProgram, glm::vec4 color) const override{
+        drawWithOffset(currentShaderProgram, color, 0, 0, 0);
+    }
+
+    void drawWithOffset(unsigned int currentShaderProgram, glm::vec4 color,
+                        float xOffset, float yOffset, float zOffset) const override{
         float vertices[] = {
-                a.x, a.y, a.z, 0.0f, 1.0f, 0.0f,
-                b.x, b.y, b.z, 0.0f, 1.0f, 0.0f,
-                c.x, c.y, c.z, 0.0f, 1.0f, 0.0f
+                a.x + xOffset, a.y + yOffset, a.z + zOffset, 0.0f, 1.0f, 0.0f,
+                b.x + xOffset, b.y + yOffset, b.z + zOffset, 0.0f, 1.0f, 0.0f,
+                c.x + xOffset, c.y + yOffset, c.z + zOffset, 0.0f, 1.0f, 0.0f
         };
         unsigned int VAO, VBO;
 
@@ -110,12 +138,47 @@ public:
         t1.draw(currentShaderProgram, color);
         t2.draw(currentShaderProgram, color);
     }
+    void drawWithOffset(unsigned int currentShaderProgram, glm::vec4 color,
+                        float xOffset, float yOffset, float zOffset) const override{
+        t1.drawWithOffset(currentShaderProgram, color, xOffset, yOffset, zOffset);
+        t2.drawWithOffset(currentShaderProgram, color, xOffset, yOffset, zOffset);
+    }
+
 };
 
+//Fundamental shaders and rendering
+extern const char* vertexShaderSource;
+extern const char* fragmentShaderSource;
+extern const char* backgroundVertexShader;
+extern const char* backgroundFragmentShader;
+extern const char* uiVertexShaderSource;
+extern const char* uiFragmentShaderSource;
+
+//Shader programs, VAOs, VBOs
+extern unsigned int shaderProgram;
+extern unsigned int backgroundShaderProgram;
+extern unsigned int backgroundVAO, backgroundVBO;
+extern unsigned int crosshairVAO, crosshairVBO, uiShaderProgram;
+extern GLFWwindow* window;
+
+unsigned int createShaderProgram();
+unsigned int createBackgroundShaderProgram();
+unsigned int createUIShaderProgram();
+void framebuffer_size_callback(GLFWwindow* currentWindow, int width, int height);
+void renderPauseMenu(unsigned int pauseShaderProgram);
+
+//Physical class for 3D objects
 class Physical {
 public:
+    std::vector<glm::vec3> forces;
     std::vector<std::shared_ptr<Shape>> mesh;
     glm::vec4 colour;
+
+    bool isCollidable;
+
+    float x = 0;
+    float y = 0;
+    float z = 0;
 
     float width;
     float height;
@@ -123,15 +186,42 @@ public:
 
     Physical(const std::vector<std::shared_ptr<Shape>>& initMesh, glm::vec4 colour) :
             mesh(initMesh), colour(colour){
-
         computeBounds();
 
     }
 
     void draw(unsigned int currentShaderProgram){
         for (const auto& shape : mesh) {
-            shape->draw(currentShaderProgram, colour);
+            shape->drawWithOffset(currentShaderProgram, colour, x, y, z);
         }
+    }
+
+    void applyForce(glm::vec3 force){
+        forces.push_back(force);
+    }
+
+    bool isColliding(Physical* collisionPhysical){
+        if (collisionPhysical == this) return false;
+
+        float minX = x - width / 2.0f;
+        float maxX = x + width / 2.0f;
+        float minY = y - height / 2.0f;
+        float maxY = y + height / 2.0f;
+        float minZ = z - depth / 2.0f;
+        float maxZ = z + depth / 2.0f;
+
+        float otherMinX = collisionPhysical->x - collisionPhysical->width / 2.0f;
+        float otherMaxX = collisionPhysical->x + collisionPhysical->width / 2.0f;
+        float otherMinY = collisionPhysical->y - collisionPhysical->height / 2.0f;
+        float otherMaxY = collisionPhysical->y + collisionPhysical->height / 2.0f;
+        float otherMinZ = collisionPhysical->z - collisionPhysical->depth / 2.0f;
+        float otherMaxZ = collisionPhysical->z + collisionPhysical->depth / 2.0f;
+
+        bool xOverlap = (minX <= otherMaxX) && (maxX >= otherMinX);
+        bool yOverlap = (minY <= otherMaxY) && (maxY >= otherMinY);
+        bool zOverlap = (minZ <= otherMaxZ) && (maxZ >= otherMinZ);
+
+        return xOverlap && yOverlap && zOverlap;
     }
 
 private:
@@ -152,66 +242,52 @@ private:
     }
 };
 
-class Camera{
-public:
-    glm::vec3 pos;
-    glm::vec3 front;
-    glm::vec3 up;
-
-    Camera(glm::vec3 position, glm::vec3 frontDir, glm::vec3 upDir) {
-        pos = position;
-        front = frontDir;
-        up = upDir;
-    }
-};
-
+//Vector for all global Physicals
 extern std::vector<std::unique_ptr<Physical>> physicalWorld;
-extern std::vector<std::unique_ptr<Shape>> surfaces;
 
-unsigned int createShaderProgram();
-unsigned int createBackgroundShaderProgram();
-unsigned int createUIShaderProgram();
-
-void mouseInput(GLFWwindow* window, double xpos, double ypos);
-void keyboardInput(GLFWwindow* currentWindow);
-void framebuffer_size_callback(GLFWwindow* currentWindow, int width, int height);
-
-void drawTriangle(Triangle toDraw, unsigned int currentShaderProgram, glm::vec4 color);
-void drawRectangle(Rectangle toDraw, unsigned int currentShaderProgram, glm::vec4 color);
-void renderPauseMenu(unsigned int pauseShaderProgram);
-
-void startEngine();
-void engineUpdate();
-
-//rendering
+//Frame rendering
 void engineBeginFrame();
 void engineEndFrame();
 void handleUI();
-
-//Cameras
-void setCamera(Camera target);
 
 //Skyboxes
 unsigned int initSkybox(const char* faces[6]);
 void renderSkybox();
 
-void drawScene();
+//PHYSICS
 
+//Collision detection comparison
+std::vector<Physical*> detectCollisionWithPhysical(Physical* physical);
+
+//Physics simulation
+void simulateFrame();
+
+//Time function
+float getDeltaTime();
+
+//INPUT
+
+//Helpful pausing/view switching variables
 extern bool isPaused;
-
 extern bool escPressedLastFrame;
 
+//Mouse input variables
 extern float lastX;
 extern float lastY;
 extern bool firstMouse;
 extern float yaw;
 extern float pitch;
 extern float sensitivity;
-extern float playerSpeed;
 
-extern const char* vertexShaderSource;
-extern const char* fragmentShaderSource;
-extern const char* backgroundVertexShader;
-extern const char* backgroundFragmentShader;
-extern const char* uiVertexShaderSource;
-extern const char* uiFragmentShaderSource;
+extern float pitchLimit;
+extern float yawLimit;
+
+//Input handlers
+void mouseInput(GLFWwindow* window, double xpos, double ypos);
+void keyboardInput(GLFWwindow* currentWindow);
+
+//CORE ENGINE LOOP FUNCTIONS
+
+void startEngine();
+void engineUpdate();
+void drawScene();
